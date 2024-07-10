@@ -262,13 +262,7 @@ class CrosswordCreator():
             for var, neighbors in neighborCount.items():
                 if neighbors == minNeighborCount: # All var's w min no. neighbors added to new dict
                     return var
-             
-            """if len(minNeighbors) == 1:
-                return minNeighbors.keys()
-            else: # Pick any with min no. neighbors
-                choice = random.choice(list([item[0] for item in minNeighbors.items()]))
-                return choice"""
-
+                
     def backtrack(self, assignment):
         """
         Using Backtracking Search, take as input a partial assignment for the
