@@ -102,7 +102,7 @@ class CrosswordCreator():
          constraints; in this case, the length of the word.)
         """
         for node in copy.deepcopy(self.domains): # Loop over crossword nodes
-            for word in self.domains[node]: # Loop over all words in each node's domain
+            for word in copy.deepcopy(self.domains[node]): # Loop over all words in each node's domain
                 if len(word) != node.length:
                     self.domains[node].remove(word) # Remove words not equal to length of node
 
@@ -119,9 +119,9 @@ class CrosswordCreator():
         
         i,j = self.crossword.overlaps[x,y] # return the co-ordinates of overlap
         revised = False
-        for word_x in self.domains[x]: # Loop over words in x's domain
+        for word_x in copy.deepcopy(self.domains[x]): # Loop over words in x's domain
             arcConsistent = False
-            for word_y in self.domains[y]: # Loop over words in y's domain
+            for word_y in copy.deepcopy(self.domains[y]): # Loop over words in y's domain
                 if word_x[i] == word_y[j]: 
                     arcConsistent = True
             if not arcConsistent:
@@ -141,20 +141,20 @@ class CrosswordCreator():
         """
 
         """start with an initial queue of all of the arcs in the problem."""
-        if not arcs:
+        if arcs is None:
             queue = [] # Initialise empty queue
             for node in copy.deepcopy(self.domains): # Loop over nodes
                 neighbors = self.crossword.neighbors(node) # Get neighbors for node
                 for neighbor in neighbors:
                     queue.append((node,neighbor)) # Add arc to queue for each node
-    
         # Otherwise, begin with queue of only the arcs in the list arcs (where each arc is a tuple (x, y) of a variable x and a different variable y).
-        queue = [(i,j) for (i,j) in arcs]
+        else:
+            queue = [(i,j) for (i,j) in arcs]
         
-        while queue not empty:
+        while len(queue) != 0:
             (i,j) = queue.pop(0) # Remove the first tuple from the queue, & assign to (i,j)
-            if revise(i,j): # If i wasn't consistent with j:
-                if self.domains[i].length == 0: # If domain is empty, return False - No more solutions possible to trial
+            if self.revise(i,j): # If i wasn't consistent with j
+                if len(self.domains[i]) == 0: # If domain is empty, return False - No more solutions possible to trial
                     return False
                 for k in self.crossword.neighbors(i): 
                     if k != j:
@@ -183,22 +183,23 @@ class CrosswordCreator():
         Return True if `assignment` is consistent (i.e., words fit in crossword
         puzzle without conflicting characters); return False otherwise.
         """
-        for index1, var in enumerate(copy.deepcopy(assignment)): # Loop over assignment vars
-            for index2, var_check in enumerate(copy.deepcopy(assignment)):
-                if index1 == index2:
-                    continue
-                # All vars must be distinct
-                if assignment[var] == assignment[var_check]:
-                    return False         
+        for var in copy.deepcopy(assignment):
+            var_word = assignment[var]
+
+            # All vars must be distinct
+            if list(assignment.values()).count(var_word) > 1: # Can only be one isntance of each word
+                return False
             # All vars are correct length
-            if len(assignment[var]) != var.length:
+            if len(var_word) != var.length:
                 return False
             # No conflicts between neighbors
-            neighbors = self.crossword.neighbors(assignment[var])
+            neighbors = self.crossword.neighbors(var)
             for neighbor in neighbors:
-                i,j = self.crossword.overlaps[var,neighbor] # Get overlap co-ords
-                if assignment[var][i] != self.domains[neighbor][j]:
-                    return False
+                if neighbor in assignment: # Confirm that neighbor is in assignment
+                    neighbor_word = assignment[neighbor]
+                    i,j = self.crossword.overlaps[var,neighbor] # Get overlap co-ords
+                    if var_word[i] != neighbor_word[j]:
+                        return False
         return True # If consistent
 
     def order_domain_values(self, var, assignment):
@@ -214,9 +215,9 @@ class CrosswordCreator():
 
         for neighbor in unassigned: # Loop over unasssigned neighbors
             i,j = self.crossword.overlaps[var, neighbor] # Get index of overlapping indices
-            n = 0 # Initialise count of eliminated choices
-            for var_word in var:
-                for neighbor_word in self.crossword.domains[neighbor]: # Loop over words in neighbors' domain
+            for var_word in copy.deepcopy(self.domains[var]):
+                n = 0 # Initialise count of eliminated choices
+                for neighbor_word in copy.deepcopy(self.domains[neighbor]): # Loop over words in neighbors' domain
                     if var_word[i] != neighbor_word[j]:
                         n += 1 # Increase count by one, as arc inconsistency
                 rankings[var_word] = rankings.get(var_word, 0) + n # Add count to 'rankings' dictionary
@@ -248,7 +249,8 @@ class CrosswordCreator():
                 minDomains[key] = value # Add all keys with smallest length domains
 
         if len(minDomains) == 1:
-            return self.crossword.variables[minDomains.keys()[0]] # Return unnassigned variable
+            minNode = list(minDomains.keys())[0]
+            return minNode # Return unnassigned variable
         else: # Order next by their no. neighbors
             neighborCount = dict() # Initialise dict for neighbor count
             for key, value in minDomains.items():
@@ -257,15 +259,15 @@ class CrosswordCreator():
 
             minNeighborCount = min(neighborCount.values()) # Get min no. neighbors
             minNeighbors = dict() # Initialise dictionary for storing the neighbor counts
-            for var, neighbors in copy.deepcopy(neighborCount):
+            for var, neighbors in neighborCount.items():
                 if neighbors == minNeighborCount: # All var's w min no. neighbors added to new dict
-                    minNeighbors[var] = neighbors
+                    return var
              
-            if len(minNeighbors) == 1:
-                return self.crossword.variables[minNeighbors.keys()[0]]
+            """if len(minNeighbors) == 1:
+                return minNeighbors.keys()
             else: # Pick any with min no. neighbors
-                choice = random.choice(minNeighbors.keys())
-                return self.crossword.variables[choice]
+                choice = random.choice(list([item[0] for item in minNeighbors.items()]))
+                return choice"""
 
     def backtrack(self, assignment):
         """
@@ -277,21 +279,21 @@ class CrosswordCreator():
         If no assignment is possible, return None.
         """
         # Check if assignment complete
-        checkCompletion = assignment_complete(assignment)
+        checkCompletion = self.assignment_complete(assignment)
         if checkCompletion:
             return assignment # return complete assignment
         else:
-            var = select_unassigned_variable(assignment) # select unassigned var
-            for value in copy.deepcopy(self.domains[var]) # loop through domain values
+            var = self.select_unassigned_variable(assignment) # select unassigned var
+            for word in copy.deepcopy(self.domains[var]): # loop through domain value
                 test_assignment = copy.deepcopy(assignment)
-                test_assignment[var] = value # trial adding each value to the assignment
-                checkConsistency = consistent(test_assignment) # check if assignment nodes are consistent w new value
+                test_assignment[var] = word # trial adding each value to the assignment
+                checkConsistency = self.consistent(test_assignment) # check if assignment nodes are consistent w new value
                 if checkConsistency: # If consistent...
-                    assignment[var] = value # update actual 'assignment'
-                    result = backtrack(assignment) # recursion - call backtrack on new 'assignment'!
+                    assignment[var] = word # update actual 'assignment'
+                    result = self.backtrack(assignment) # recursion - call backtrack on new 'assignment'!
                     if result: # If result returns array, must be complete
                         return result
-                    assignment.remove(var) # If completion impossible, backtrack to try new value in domain
+                    del assignment[var] # If completion impossible, backtrack to try new value in domain
 
         # If not possible to complete w current assignment of values, return None & backtrack
         return None
